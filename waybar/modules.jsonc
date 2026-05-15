@@ -39,6 +39,14 @@
         }
     },
 
+    "custom/gpu": {
+        "exec": "nvidia-smi --query-gpu=utilization.gpu,temperature.gpu --format=csv,noheader,nounits | awk -F ', ' '{print \"󰢮 \" $1 \"% \" $2 \"°\"}'",
+        "interval": 5,
+        "return-type": "text",
+        "tooltip": true,
+        "tooltip-format": "GPU utilization and temperature"
+    },
+
     "tray" : {
         "icon-size": 13,
         "spacing": 12,
