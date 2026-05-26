@@ -1,16 +1,24 @@
 {
     "hyprland/workspaces": {
         "format": "{icon}",
-        "move-to-monitor": true,
+        "move-to-monitor": false,
         "on-scroll-down": "hyprctl dispatch \"hl.dsp.focus({workspace = 'e+1'}\")",
         "on-scroll-up":   "hyprctl dispatch \"hl.dsp.focus({workspace = 'e-1'}\")",
-        "persistent-workspaces": { "*": 5 },
+        "persistent-workspaces": {
+            "DP-2": [1, 2, 3, 4],
+            "DP-3": [5, 6, 7, 8, 9]
+        },
         "cursor": true,
         "format-icons": {
             "active": "󰮯",
             "persistent": "",
             "empty": ""
          }
+    },
+
+    "custom/arch": {
+        "format": "",
+        "tooltip": false
     },
 
     "niri/workspaces": {
@@ -166,7 +174,7 @@
     },
 
     "clock": {
-        "timezone": "America/Argentina/Buenos_Aires",
+        "timezone": "America/New_York",
         "tooltip-format": "<tt><small>{calendar}</small></tt>",
         "format-alt": "{:%H:%M %d %B %Y}",
         "on-click-right": "hyprctl eval \"hl.exec_cmd('alacritty --class=peaclock -e peaclock')\"",

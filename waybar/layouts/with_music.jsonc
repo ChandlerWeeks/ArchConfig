@@ -4,7 +4,7 @@
     "height": 25,
     "margin": "5 0",
 
-    "modules-left"   : ["hyprland/workspaces", "mpris"],
+    "modules-left"   : ["custom/arch", "hyprland/workspaces", "mpris"],
     "modules-center" : ["clock"],
     "modules-right"  : ["pulseaudio", "network", "memory", "cpu", "custom/gpu", "tray"],
 

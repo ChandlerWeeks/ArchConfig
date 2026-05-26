@@ -116,8 +116,14 @@
 }
 
 #custom-start,
-#custom-ctlcenter {
+#custom-ctlcenter,
+#custom-arch {
     color: @blue;
+}
+
+#custom-arch {
+    font-size: 16px;
+    margin: 0 10px 0 7px;
 }
 
 #workspaces button {
