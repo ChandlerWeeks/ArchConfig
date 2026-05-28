@@ -1,0 +1,84 @@
+/* Catppuccin-Mocha-flavoured dark theme for rofi. */
+* {
+    bg:        #1e1e2e;
+    bg-alt:    #313244;
+    fg:        #cdd6f4;
+    fg-alt:    #6c7086;
+    accent:    #89b4fa;
+    urgent:    #f38ba8;
+
+    background-color: transparent;
+    text-color:       @fg;
+    font:             "JetBrainsMono Nerd Font 12";
+}
+
+window {
+    transparency:     "real";
+    location:         center;
+    anchor:           center;
+    width:            640px;
+    border-radius:    12px;
+    border:           2px;
+    border-color:     @bg-alt;
+    background-color: @bg;
+}
+
+mainbox {
+    padding:  16px;
+    spacing:  12px;
+    children: [ inputbar, listview ];
+}
+
+inputbar {
+    spacing:          10px;
+    padding:          10px 14px;
+    border-radius:    8px;
+    background-color: @bg-alt;
+    children:         [ prompt, entry ];
+}
+
+prompt {
+    text-color: @accent;
+}
+
+entry {
+    placeholder:       "Search…";
+    placeholder-color: @fg-alt;
+}
+
+listview {
+    columns:      1;
+    lines:        8;
+    fixed-height: false;
+    scrollbar:    false;
+    spacing:      4px;
+}
+
+element {
+    padding:       8px 12px;
+    spacing:       10px;
+    border-radius: 8px;
+}
+
+element normal active {
+    text-color: @accent;
+}
+
+element selected {
+    background-color: @accent;
+    text-color:       @bg;
+}
+
+element selected active {
+    background-color: @accent;
+    text-color:       @bg;
+}
+
+element-icon {
+    size:           1.2em;
+    vertical-align: 0.5;
+}
+
+element-text {
+    vertical-align: 0.5;
+}

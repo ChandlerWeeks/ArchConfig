@@ -1,0 +1,20 @@
+configuration {
+    /* Modes available. Cycle with Shift+Left / Shift+Right. */
+    modi:                "drun,run,window";
+
+    show-icons:          true;
+    icon-theme:          "Papirus-Dark";
+    terminal:            "kitty";
+
+    drun-display-format: "{name}";
+    display-drun:        " Apps";
+    display-run:         " Run";
+    display-window:      " Windows";
+
+    sidebar-mode:        false;
+    hover-select:        false;
+    case-sensitive:      false;
+    matching:            "fuzzy";
+}
+
+@theme "theme.rasi"
