@@ -1,0 +1,10 @@
+/* Catppuccin Mocha — mauve accent. */
+@define-color module-bg rgba(24, 24, 37, 0.96);
+@define-color tooltip-bg #1e1e2e;
+@define-color inactive #7f849c;
+@define-color fg #cdd6f4;
+@define-color workspace-fg #bac2de;
+@define-color red #f38ba8;
+@define-color blue #cba6f7;
+@define-color yellow #f9e2af;
+@define-color green #a6e3a1;

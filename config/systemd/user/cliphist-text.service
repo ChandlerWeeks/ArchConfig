@@ -1,0 +1,13 @@
+[Unit]
+Description=Clipboard text history
+PartOf=graphical-session.target
+ConditionEnvironment=WAYLAND_DISPLAY
+
+[Service]
+UMask=0077
+ExecStart=/usr/bin/wl-paste --type text --watch /usr/bin/cliphist store
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

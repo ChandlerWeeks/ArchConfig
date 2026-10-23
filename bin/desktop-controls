@@ -1,0 +1,483 @@
+#!/usr/bin/env python3
+"""Waybar dropdowns for audio, Wi-Fi, Bluetooth, and the calendar."""
+import concurrent.futures
+import datetime
+import fcntl
+import json
+import os
+from pathlib import Path
+import signal
+import subprocess
+import sys
+import gi
+gi.require_version('Gtk', '3.0')
+gi.require_version('Gdk', '3.0')
+gi.require_version('GLibUnix', '2.0')
+gi.require_version('GtkLayerShell', '0.1')
+from gi.repository import Gdk, Gio, GLib, GLibUnix, Gtk, GtkLayerShell
+
+POOL = concurrent.futures.ThreadPoolExecutor(max_workers=3)
+MODE = sys.argv[1] if len(sys.argv) > 1 else 'audio'
+RUNTIME = Path(os.environ.get('XDG_RUNTIME_DIR', '/tmp'))
+LOCK = (RUNTIME / f'desktop-panel-{os.getuid()}.lock').open('a+')
+try:
+    fcntl.flock(LOCK, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except BlockingIOError:
+    LOCK.seek(0)
+    try:
+        pid, old_mode = LOCK.read().split()
+        os.kill(int(pid), signal.SIGTERM)
+        if old_mode == MODE:
+            sys.exit(0)
+        fcntl.flock(LOCK, fcntl.LOCK_EX)
+    except (ValueError, ProcessLookupError):
+        sys.exit(0)
+LOCK.seek(0)
+LOCK.truncate()
+LOCK.write(f'{os.getpid()} {MODE}')
+LOCK.flush()
+
+
+def run(*args, timeout=15):
+    result = subprocess.run(args, text=True, capture_output=True, timeout=timeout)
+    if result.returncode:
+        raise RuntimeError(result.stderr.strip() or result.stdout.strip() or 'Action failed')
+    return result.stdout.strip()
+
+
+def launch(*args):
+    try:
+        subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=True)
+    except OSError as error:
+        panel.message(str(error))
+        return
+    panel.close()
+
+
+CSS = b'''
+window { background: transparent; }
+#panel { background: rgba(30, 30, 46, 0.98); color: #cdd6f4;
+ border: 1px solid #45475a; border-radius: 18px; padding: 20px;
+ font-family: "JetBrainsMono Nerd Font"; font-size: 13px; }
+.title { font-size: 19px; font-weight: bold; color: #cdd6f4; }
+.subtitle { color: #a6adc8; font-size: 12px; }
+.section { color: #cba6f7; font-weight: bold; margin-top: 10px; }
+button { background: #313244; color: #cdd6f4; border: 1px solid #45475a;
+ border-radius: 9px; padding: 9px 12px; box-shadow: none; text-shadow: none; }
+button:hover { background: #45475a; border-color: #cba6f7; }
+button:checked { background: #585b70; color: #cdd6f4; }
+button:disabled { color: #6c7086; }
+entry { background: #313244; color: #cdd6f4; border: 1px solid #cba6f7;
+ border-radius: 8px; padding: 9px; }
+scale trough { background: #45475a; border-radius: 6px; min-height: 7px; }
+scale highlight { background: #cba6f7; border-radius: 6px; }
+scale slider { background: #cdd6f4; border-radius: 12px; min-width: 14px;
+ min-height: 14px; border: none; box-shadow: none; }
+calendar { background: transparent; color: #cdd6f4; border: none; padding: 5px; }
+calendar:selected { background: #cba6f7; color: #181825; border-radius: 6px; }
+calendar.header { color: #cba6f7; }
+separator { background: #45475a; margin: 5px 0; }
+'''
+
+
+class Panel:
+    def __init__(self):
+        self.closed = False
+        self.scanning_adapter = None
+        self.bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
+        self.window = Gtk.Window(title='Desktop controls')
+        GtkLayerShell.init_for_window(self.window)
+        GtkLayerShell.set_namespace(self.window, 'desktop-controls')
+        GtkLayerShell.set_exclusive_zone(self.window, -1)
+        GtkLayerShell.set_layer(self.window, GtkLayerShell.Layer.OVERLAY)
+        GtkLayerShell.set_keyboard_mode(self.window, GtkLayerShell.KeyboardMode.EXCLUSIVE)
+        for edge in (GtkLayerShell.Edge.TOP, GtkLayerShell.Edge.BOTTOM,
+                     GtkLayerShell.Edge.LEFT, GtkLayerShell.Edge.RIGHT):
+            GtkLayerShell.set_anchor(self.window, edge, True)
+        self.set_monitor()
+        self.window.connect('key-press-event', self.key_press)
+        self.window.connect('destroy', lambda *_: Gtk.main_quit())
+        provider = Gtk.CssProvider()
+        provider.load_from_data(CSS)
+        Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(), provider,
+                                                 Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        backdrop = Gtk.EventBox()
+        backdrop.connect('button-press-event', lambda *_: self.close())
+        self.window.add(backdrop)
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        backdrop.add(outer)
+        self.body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        self.body.set_name('panel')
+        self.body.set_size_request(400, -1)
+        self.body.set_margin_top(44)
+        self.body.set_margin_end(16)
+        self.body.set_margin_start(16)
+        self.body.set_halign(Gtk.Align.CENTER if MODE == 'clock' else Gtk.Align.END)
+        # Prevent clicks inside the panel from dismissing the dropdown.
+        guard = Gtk.EventBox()
+        guard.set_halign(self.body.get_halign())
+        guard.add(self.body)
+        guard.connect('button-press-event', lambda *_: True)
+        outer.pack_start(guard, False, False, 0)
+        header = Gtk.Box(spacing=12)
+        titles = {'audio': '󰕾  Sound', 'microphone': '󰍬  Microphone',
+                  'wifi': '  Wi-Fi', 'bluetooth': '󰂯  Bluetooth', 'clock': '󰃭  Calendar'}
+        title = self.label(titles.get(MODE, 'Controls'), 'title')
+        header.pack_start(title, True, True, 0)
+        header.pack_end(self.button('×', self.close), False, False, 0)
+        self.body.pack_start(header, False, False, 0)
+        self.status = self.label('', 'subtitle')
+        self.status.set_line_wrap(True)
+        self.body.pack_end(self.status, False, False, 0)
+        self.content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        self.body.pack_start(self.content, False, False, 0)
+        if MODE in ('audio', 'microphone'):
+            self.audio()
+        elif MODE == 'wifi':
+            self.wifi()
+        elif MODE == 'bluetooth':
+            self.bluetooth()
+        elif MODE == 'clock':
+            self.calendar()
+        self.window.show_all()
+        GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM, self.close)
+
+    def set_monitor(self):
+        try:
+            monitors = json.loads(run('hyprctl', '-j', 'monitors'))
+            active = next(m for m in monitors if m['focused'])
+            display = Gdk.Display.get_default()
+            for index in range(display.get_n_monitors()):
+                monitor = display.get_monitor(index)
+                geometry = monitor.get_geometry()
+                if geometry.x == active['x'] and geometry.y == active['y']:
+                    GtkLayerShell.set_monitor(self.window, monitor)
+                    break
+        except Exception:
+            pass
+
+    @staticmethod
+    def label(text, style=None):
+        label = Gtk.Label(label=text, xalign=0)
+        if style:
+            label.get_style_context().add_class(style)
+        return label
+
+    @staticmethod
+    def button(text, callback):
+        button = Gtk.Button(label=text)
+        button.connect('clicked', lambda *_: callback())
+        return button
+
+    def add(self, widget, parent=None):
+        (parent if parent is not None else self.content).pack_start(widget, False, False, 0)
+        widget.show_all()
+        return widget
+
+    def message(self, text):
+        if not self.closed:
+            self.status.set_text(text[:280])
+        return False
+
+    def work(self, task, callback=None):
+        def complete(future):
+            try:
+                result = future.result()
+                if not self.closed and callback:
+                    callback(result)
+            except Exception as error:
+                self.message(str(error))
+            return False
+        POOL.submit(task).add_done_callback(lambda f: GLib.idle_add(complete, f))
+
+    def command(self, args, callback=None):
+        self.work(lambda: run(*args, timeout=45), callback)
+
+    def key_press(self, _window, event):
+        if event.keyval == Gdk.KEY_Escape:
+            self.close()
+            return True
+        return False
+
+    def close(self):
+        if self.closed:
+            return False
+        self.closed = True
+        if self.scanning_adapter:
+            self.bluez_call(self.scanning_adapter, 'org.bluez.Adapter1', 'StopDiscovery')
+        LOCK.close()
+        self.window.destroy()
+        return False
+
+    def audio(self):
+        self.audio_rows = []
+        for kind, title, target in [('sink', 'Output volume', '@DEFAULT_SINK@'),
+                                    ('source', 'Microphone level', '@DEFAULT_SOURCE@')]:
+            if MODE == 'microphone' and kind == 'sink':
+                continue
+            self.add(self.label(title, 'section'))
+            row = Gtk.Box(spacing=8)
+            scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 100, 1)
+            scale.set_hexpand(True)
+            scale.set_draw_value(True)
+            scale.set_value_pos(Gtk.PositionType.RIGHT)
+            scale.set_size_request(270, -1)
+            scale.connect('button-press-event', lambda s, _: setattr(s, 'dragging', True) or False)
+            scale.connect('button-release-event', lambda s, _: setattr(s, 'dragging', False) or False)
+            scale.connect('value-changed', lambda s, k=kind, t=target: self.queue_volume(s, k, t))
+            mute = self.button('Mute', lambda k=kind, t=target:
+                               self.command(['pactl', f'set-{k}-mute', t, 'toggle'],
+                                            lambda _: self.refresh_audio()))
+            row.pack_start(scale, True, True, 0)
+            row.pack_end(mute, False, False, 0)
+            self.add(row)
+            combo = Gtk.ComboBoxText()
+            combo.connect('changed', lambda c, k=kind: self.select_audio(k, c))
+            self.add(combo)
+            self.audio_rows.append((kind, target, scale, mute, combo))
+        self.add(self.button('Open full sound settings  ↗', lambda: launch('pavucontrol')))
+        self.refresh_audio()
+        GLib.timeout_add_seconds(3, self.refresh_audio)
+
+    def queue_volume(self, scale, kind, target):
+        if getattr(scale, 'updating', False):
+            return
+        if getattr(scale, 'volume_timeout', None):
+            GLib.source_remove(scale.volume_timeout)
+        def apply():
+            scale.volume_timeout = None
+            self.command(['pactl', f'set-{kind}-volume', target, f'{round(scale.get_value())}%'])
+            return False
+        scale.volume_timeout = GLib.timeout_add(100, apply)
+
+    def refresh_audio(self):
+        if self.closed:
+            return False
+        def read():
+            result = []
+            for kind, target, *_ in self.audio_rows:
+                devices = json.loads(run('pactl', '--format=json', 'list', kind + 's'))
+                default = run('pactl', f'get-default-{kind}')
+                result.append((devices, default))
+            return result
+        def update(result):
+            for row, (devices, default) in zip(self.audio_rows, result):
+                kind, target, scale, mute, combo = row
+                scale.updating = True
+                combo.updating = True
+                combo.remove_all()
+                for device in devices:
+                    if kind == 'source' and device.get('monitor_of_sink') not in (None, 4294967295):
+                        continue
+                    combo.append(device['name'], device.get('description', device['name'])[:58])
+                    if device['name'] == default:
+                        if not getattr(scale, 'dragging', False):
+                            volumes = device.get('volume', {}).values()
+                            value = next(iter(volumes), {}).get('value_percent', '0%')
+                            scale.set_value(float(value.rstrip('%')))
+                        mute.set_label('Unmute' if device.get('mute') else 'Mute')
+                combo.set_active_id(default)
+                combo.updating = False
+                scale.updating = False
+        self.work(read, update)
+        return True
+
+    def select_audio(self, kind, combo):
+        name = combo.get_active_id()
+        if getattr(combo, 'updating', False) or not name:
+            return
+        def change():
+            run('pactl', f'set-default-{kind}', name)
+            stream_kind = 'sink-inputs' if kind == 'sink' else 'source-outputs'
+            for line in run('pactl', 'list', 'short', stream_kind).splitlines():
+                run('pactl', 'move-' + ('sink-input' if kind == 'sink' else 'source-output'),
+                    line.split()[0], name)
+        self.work(change, lambda _: self.refresh_audio())
+
+    def wifi(self):
+        row = Gtk.Box(spacing=8)
+        row.pack_start(self.button('Scan networks', lambda: self.scan_wifi(True)), True, True, 0)
+        row.pack_end(self.button('Wi-Fi on / off', self.toggle_wifi), False, False, 0)
+        self.add(row)
+        self.networks = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_min_content_height(120)
+        scroll.set_max_content_height(320)
+        scroll.set_propagate_natural_height(True)
+        scroll.add(self.networks)
+        self.add(scroll)
+        self.password_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self.add(self.password_box)
+        self.add(self.button('Open nmtui  ↗', lambda: launch('kitty', '--title', 'Network settings', '-e', 'nmtui')))
+        self.add(self.button('Saved connections  ↗', lambda: launch('nm-connection-editor')))
+        self.scan_wifi(True)
+
+    def toggle_wifi(self):
+        self.work(lambda: run('nmcli', 'radio', 'wifi'),
+                  lambda state: self.command(['nmcli', 'radio', 'wifi', 'off' if state == 'enabled' else 'on'],
+                                             lambda _: self.scan_wifi(False)))
+
+    @staticmethod
+    def nm_fields(line):
+        fields, field, escaped = [], '', False
+        for char in line:
+            if escaped:
+                field += char
+                escaped = False
+            elif char == '\\':
+                escaped = True
+            elif char == ':':
+                fields.append(field)
+                field = ''
+            else:
+                field += char
+        fields.append(field)
+        return fields
+
+    def scan_wifi(self, rescan):
+        if subprocess.run(['systemctl', 'is-active', '--quiet', 'NetworkManager']).returncode:
+            self.message('NetworkManager is installed. Activating it is pending approval; your current Wi-Fi connection is preserved.')
+            return
+        self.message('Scanning nearby networks…' if rescan else 'Updating networks…')
+        def scan():
+            return run('nmcli', '-t', '-f', 'IN-USE,SSID,SIGNAL,SECURITY,BSSID',
+                       'device', 'wifi', 'list', '--rescan', 'yes' if rescan else 'no', timeout=25)
+        def update(output):
+            for child in self.networks.get_children():
+                child.destroy()
+            seen = set()
+            for line in output.splitlines():
+                active, ssid, strength, security, bssid = self.nm_fields(line)
+                if not ssid or ssid in seen:
+                    continue
+                seen.add(ssid)
+                label = f'{"✓" if active == "*" else ""}  {ssid[:30]}   {strength}%  {"" if security else ""}'
+                button = self.button(label, lambda s=ssid, b=bssid, sec=security, a=active:
+                                     self.pick_wifi(s, b, sec, a))
+                button.set_tooltip_text(f'{ssid}\n{security or "Open network"}')
+                self.add(button, self.networks)
+            self.message('Select a network to connect.' if seen else 'No networks found. Check that Wi-Fi is on.')
+        self.work(scan, update)
+
+    def pick_wifi(self, ssid, bssid, security, active):
+        for child in self.password_box.get_children():
+            child.destroy()
+        if active == '*':
+            self.message(f'Connected to {ssid}.')
+            return
+        self.selected_wifi = (ssid, bssid)
+        if security:
+            self.add(self.label(ssid, 'section'), self.password_box)
+            entry = Gtk.Entry()
+            entry.set_visibility(False)
+            entry.set_placeholder_text('Password (leave blank for a saved network)')
+            self.add(entry, self.password_box)
+            self.add(self.button('Connect', lambda: self.connect_wifi(entry.get_text())), self.password_box)
+            entry.connect('activate', lambda _: self.connect_wifi(entry.get_text()))
+            entry.grab_focus()
+        else:
+            self.connect_wifi('')
+
+    def connect_wifi(self, password):
+        ssid, bssid = self.selected_wifi
+        self.message(f'Connecting to {ssid}…')
+        args = ['nmcli', '--wait', '30', 'device', 'wifi', 'connect', bssid]
+        if password:
+            args.extend(['password', password])
+        self.command(args, lambda _: self.scan_wifi(False))
+        for child in self.password_box.get_children():
+            child.destroy()
+
+    def bluez_call(self, path, interface, method, parameters=None, callback=None):
+        def done(connection, result):
+            try:
+                reply = connection.call_finish(result)
+                if callback and not self.closed:
+                    callback(reply)
+            except GLib.Error as error:
+                if not self.closed:
+                    self.message(error.message)
+        self.bus.call('org.bluez', path, interface, method, parameters, None,
+                      Gio.DBusCallFlags.NONE, 30000, None, done)
+
+    def bluetooth(self):
+        row = Gtk.Box(spacing=8)
+        row.pack_start(self.button('Scan devices', self.scan_bluetooth), True, True, 0)
+        row.pack_end(self.button('Bluetooth on / off', self.toggle_bluetooth), False, False, 0)
+        self.add(row)
+        self.bt_devices = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.add(self.bt_devices)
+        self.add(self.button('Pair a new device  ↗', lambda: launch('blueman-manager')))
+        self.refresh_bluetooth()
+        GLib.timeout_add_seconds(4, self.refresh_bluetooth)
+
+    def refresh_bluetooth(self):
+        if self.closed:
+            return False
+        def update(reply):
+            objects = reply.unpack()[0]
+            self.adapters = [(p, i['org.bluez.Adapter1']) for p, i in objects.items()
+                             if 'org.bluez.Adapter1' in i]
+            for child in self.bt_devices.get_children():
+                child.destroy()
+            count = 0
+            devices = [(p, i['org.bluez.Device1']) for p, i in objects.items()
+                       if 'org.bluez.Device1' in i]
+            devices.sort(key=lambda item: (not item[1].get('Connected', False),
+                                          not item[1].get('Paired', False), item[1].get('Alias', '')))
+            for path, device in devices[:9]:
+                connected = device.get('Connected', False)
+                name = device.get('Alias', device.get('Address', 'Device'))
+                state = 'Connected' if connected else ('Saved' if device.get('Paired') else 'Pair…')
+                self.add(self.button(f'{"✓" if connected else "󰂯"}  {name[:32]}  ·  {state}',
+                                     lambda p=path, d=device: self.pick_bluetooth(p, d)), self.bt_devices)
+                count += 1
+            powered = any(a.get('Powered') for _, a in self.adapters)
+            self.message(('Select a device to connect or disconnect.' if count else 'Scan to find nearby devices.')
+                         if powered else 'Bluetooth is off.' if self.adapters else 'No Bluetooth adapter found.')
+        self.bluez_call('/', 'org.freedesktop.DBus.ObjectManager', 'GetManagedObjects', callback=update)
+        return True
+
+    def toggle_bluetooth(self):
+        for path, adapter in getattr(self, 'adapters', []):
+            value = not adapter.get('Powered', False)
+            params = GLib.Variant('(ssv)', ('org.bluez.Adapter1', 'Powered', GLib.Variant('b', value)))
+            self.bluez_call(path, 'org.freedesktop.DBus.Properties', 'Set', params,
+                            lambda _: self.refresh_bluetooth())
+
+    def scan_bluetooth(self):
+        for path, adapter in getattr(self, 'adapters', []):
+            if adapter.get('Powered'):
+                self.scanning_adapter = path
+                self.bluez_call(path, 'org.bluez.Adapter1', 'StartDiscovery',
+                                callback=lambda _: self.message('Scanning…'))
+
+    def pick_bluetooth(self, path, device):
+        if not device.get('Paired'):
+            launch('blueman-manager')
+            return
+        method = 'Disconnect' if device.get('Connected') else 'Connect'
+        self.message(f'{method}ing {device.get("Alias", "device")}…')
+        self.bluez_call(path, 'org.bluez.Device1', method, callback=lambda _: self.refresh_bluetooth())
+
+    def calendar(self):
+        now = datetime.datetime.now()
+        self.add(self.label(now.strftime('%A, %B %-d, %Y'), 'section'))
+        self.time = self.add(self.label(now.strftime('%-I:%M:%S %p'), 'title'))
+        calendar = Gtk.Calendar()
+        calendar.set_property('show-week-numbers', True)
+        calendar.mark_day(now.day)
+        self.add(calendar)
+        def tick():
+            if self.closed:
+                return False
+            self.time.set_text(datetime.datetime.now().strftime('%-I:%M:%S %p'))
+            return True
+        GLib.timeout_add_seconds(1, tick)
+
+
+panel = Panel()
+Gtk.main()
+POOL.shutdown(wait=False, cancel_futures=True)

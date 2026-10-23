@@ -1,0 +1,23 @@
+{
+  "layer": "top",
+  "position": "top",
+  "height": 30,
+  "margin": "5 8",
+  "modules-left": [
+    "group/desktops",
+    "mpris"
+  ],
+  "modules-center": [
+    "clock"
+  ],
+  "modules-right": [
+    "group/connectivity",
+    "group/system",
+    "custom/notifications",
+    "tray"
+  ],
+  "include": [
+    "~/.config/waybar/modules.jsonc"
+  ],
+  "spacing": 8
+}

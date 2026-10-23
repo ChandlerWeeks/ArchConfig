@@ -1,5 +1,19 @@
-discord/
-Code/
-vivaldi/
-pulse/cookie
-go/telemetry/local/upload.token
+# Local hardware overrides and private runtime state.
+config/hypr/local.conf
+*.local.conf
+__pycache__/
+*.py[cod]
+*.swp
+*.swo
+.DS_Store
+.env
+.env.*
+*.pem
+*.key
+*.sqlite*
+*.db
+*.db-*
+dconf/
+.cache/
+.state/
+backups/

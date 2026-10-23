@@ -1,0 +1,4 @@
+# Store at most 500 text/image entries. The database stays outside Git.
+max-items 500
+max-dedupe-search 100
+preview-width 100

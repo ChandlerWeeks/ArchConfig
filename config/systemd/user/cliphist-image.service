@@ -1,0 +1,13 @@
+[Unit]
+Description=Clipboard image history
+PartOf=graphical-session.target
+ConditionEnvironment=WAYLAND_DISPLAY
+
+[Service]
+UMask=0077
+ExecStart=/usr/bin/wl-paste --type image --watch /usr/bin/cliphist store
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

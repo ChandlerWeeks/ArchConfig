@@ -1,0 +1,12 @@
+[Unit]
+Description=Scheduled warm display lighting
+PartOf=graphical-session.target
+ConditionEnvironment=WAYLAND_DISPLAY
+
+[Service]
+ExecStart=/usr/bin/hyprsunset
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

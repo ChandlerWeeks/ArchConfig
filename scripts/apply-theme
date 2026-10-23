@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Persist appearance via the settings portal for GTK and sandboxed apps.
+mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/dconf"
+gsettings set org.gnome.desktop.interface gtk-theme 'catppuccin-mocha-mauve-standard+default'
+gsettings set org.gnome.desktop.interface icon-theme 'Papirus-Dark'
+gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
+gsettings set org.gnome.desktop.interface font-name 'JetBrainsMono Nerd Font 10'
+gsettings set org.gnome.desktop.interface monospace-font-name 'JetBrainsMono Nerd Font Mono 10'
+gsettings set org.gnome.desktop.interface cursor-theme Adwaita
+gsettings set org.gnome.desktop.interface cursor-size 24
+if command -v kwriteconfig6 >/dev/null; then
+    kwriteconfig6 --file kdeglobals --group General --key ColorScheme CatppuccinMochaMauve
+    kwriteconfig6 --file kdeglobals --group Icons --key Theme Papirus-Dark
+fi
+# Running apps may need a restart for toolkit changes.
+
+# Flatpak Zen needs read-only access to the same theme asset directories.
+if command -v flatpak >/dev/null && flatpak info app.zen_browser.zen >/dev/null 2>&1; then
+    data="${XDG_DATA_HOME:-$HOME/.local/share}"
+    name=catppuccin-mocha-mauve-standard+default
+    mkdir -p "$HOME/.themes"
+    if [[ -d "$data/themes/$name" && ! -e "$HOME/.themes/$name" ]]; then
+        ln -s "$data/themes/$name" "$HOME/.themes/$name"
+    fi
+    flatpak override --user --filesystem="$HOME/.themes:ro" \
+        --filesystem="$data/themes:ro" --filesystem="$data/icons:ro" \
+        --env="GTK_THEME=$name" app.zen_browser.zen
+fi

@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+history=$(cliphist list)
+if [[ -z $history ]]; then
+    notify-send --app-name='Clipboard' 'Clipboard history is empty' 'Copy some text or an image, then press Super+Shift+V.'
+    exit 0
+fi
+code=0
+selected=$(printf '%s\n' "$history" | rofi -dmenu -i -no-custom -p Clipboard \
+    -display-columns 2 -kb-delete-char-forward 'Control+d' -kb-delete-entry '' \
+    -kb-custom-1 Delete -kb-custom-2 'Shift+Delete' \
+    -mesg 'Enter: copy · Delete: remove entry · Shift+Delete: clear history') || code=$?
+case "$code" in
+    0) [[ -n $selected ]] && printf '%s\n' "$selected" | cliphist decode | wl-copy ;;
+    10) [[ -n $selected ]] && printf '%s\n' "$selected" | cliphist delete ;;
+    11)
+        answer=$(printf 'Cancel\nClear history\n' | rofi -dmenu -no-custom -p 'Clear clipboard history?') || exit 0
+        if [[ $answer == 'Clear history' ]]; then cliphist wipe; fi
+        ;;
+    *) exit 0 ;;
+esac

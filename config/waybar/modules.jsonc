@@ -1,0 +1,183 @@
+{
+  "hyprland/workspaces": {
+    "format": "{icon}",
+    "move-to-monitor": false,
+    "on-scroll-down": "~/.local/bin/desktop-workspace next",
+    "on-scroll-up": "~/.local/bin/desktop-workspace previous",
+    "cursor": true,
+    "format-icons": {
+      "active": "󰮯",
+      "persistent": "",
+      "empty": ""
+    }
+  },
+  "custom/arch": {
+    "format": "",
+    "tooltip": false
+  },
+  "cpu": {
+    "interval": 30,
+    "format": " {usage}%",
+    "cursor": true,
+    "states": {
+      "warning": 80,
+      "critical": 90
+    }
+  },
+  "custom/gpu": {
+    "exec": "nvidia-smi --query-gpu=utilization.gpu,temperature.gpu --format=csv,noheader,nounits | awk -F ', ' '{print \"󰢮 \" $1 \"% \" $2 \"°\"}'",
+    "interval": 5,
+    "return-type": "text",
+    "tooltip": true,
+    "tooltip-format": "GPU utilization and temperature"
+  },
+  "tray": {
+    "icon-size": 13,
+    "spacing": 12,
+    "cursor": true
+  },
+  "memory": {
+    "interval": 10,
+    "format": "  {used:0.1f}G/{total:0.1f}G",
+    "states": {
+      "warning": 80,
+      "critical": 90
+    }
+  },
+  "pulseaudio": {
+    "format": "{icon}  {volume}%  ",
+    "format-bluetooth": "󰂯 {icon}  {volume}%  ",
+    "tooltip-format": "{desc}\nClick for volume, microphone and audio devices",
+    "format-muted": "󰝟  muted  ",
+    "scroll-step": 5,
+    "max-volume": 100,
+    "on-click": "~/.local/bin/desktop-controls audio",
+    "on-click-right": "pavucontrol",
+    "on-scroll-up": "true",
+    "on-scroll-down": "true",
+    "format-icons": {
+      "headphone": "",
+      "hands-free": "",
+      "headset": "",
+      "phone": "",
+      "portable": "",
+      "car": "",
+      "default": [
+        "<span size='12pt'>󰕿</span>",
+        "<span size='12pt'>󰖀</span>",
+        "<span size='12pt'>󰕾</span>"
+      ]
+    }
+  },
+  "network": {
+    "interval": 10,
+    "format-disabled": "󰤭  Off  ",
+    "format-disconnected": "󰤭  Wi-Fi  ",
+    "format-wifi": "  {essid:.18}  ",
+    "format-ethernet": "󰈀  Wired  ",
+    "tooltip-format": "{essid}\n\nFrequency: {frequency}GHz\nStrength: {signalStrength}%\n\n{bandwidthUpBytes}   {bandwidthDownBytes}",
+    "tooltip-format-wifi": "{essid} · {signalStrength}%\nClick to scan and connect to Wi-Fi",
+    "tooltip-format-ethernet": "Wired · {ipaddr}\nClick for networks",
+    "tooltip-format-disconnected": "Click to connect to Wi-Fi",
+    "on-click": "~/.local/bin/desktop-controls wifi",
+    "on-click-right": "kitty --title \"Network settings\" -e nmtui"
+  },
+  "bluetooth": {
+    "format": "󰂯  ",
+    "format-on": "󰂯  ",
+    "format-off": "󰂲  ",
+    "format-disabled": "󰂲  ",
+    "format-connected": "󰂯 {num_connections}  ",
+    "format-connected-battery": "󰂯 {num_connections}  ",
+    "tooltip-format": "Bluetooth\nClick for connected devices and discovery",
+    "tooltip-format-enumerate-connected": "{device_alias}",
+    "tooltip-format-enumerate-connected-battery": "{device_alias}   {device_battery_percentage}%",
+    "on-click": "~/.local/bin/desktop-controls bluetooth",
+    "on-click-right": "blueman-manager"
+  },
+  "clock": {
+    "timezone": "America/New_York",
+    "tooltip-format": "<tt><small>{calendar}</small></tt>",
+    "format-alt": "{:%A, %B %d  ·  %H:%M}",
+    "on-click-right": "~/.local/bin/desktop-controls clock",
+    "calendar": {
+      "mode": "month",
+      "weeks-pos": "right"
+    },
+    "format": "{:%a, %b %d  ·  %I:%M %p}  ",
+    "on-click": "~/.local/bin/desktop-controls clock"
+  },
+  "mpris": {
+    "format": "{artist} - {title}",
+    "tooltip-format": "{album}",
+    "format-paused": " {artist} - {title}",
+    "on-click": "playerctl play-pause",
+    "on-scroll-up": "playerctl previous",
+    "on-scroll-down": "playerctl next",
+    "max-length": 45
+  },
+  "pulseaudio#microphone": {
+    "format": "{format_source}  ",
+    "format-muted": "{format_source}  ",
+    "format-source": "󰍬",
+    "format-source-muted": "󰍭",
+    "tooltip-format": "Microphone: {source_desc}\nClick for input level, mute and microphone selection",
+    "on-click": "~/.local/bin/desktop-controls microphone",
+    "on-click-right": "pactl set-source-mute @DEFAULT_SOURCE@ toggle",
+    "on-scroll-up": "true",
+    "on-scroll-down": "true"
+  },
+  "group/desktops": {
+    "orientation": "horizontal",
+    "modules": [
+      "custom/arch",
+      "hyprland/workspaces"
+    ]
+  },
+  "group/connectivity": {
+    "orientation": "horizontal",
+    "modules": [
+      "pulseaudio",
+      "pulseaudio#microphone",
+      "network",
+      "bluetooth",
+      "custom/warm-display"
+    ]
+  },
+  "group/system": {
+    "orientation": "horizontal",
+    "modules": [
+      "memory",
+      "cpu",
+      "custom/gpu"
+    ]
+  },
+  "custom/notifications": {
+    "tooltip": true,
+    "format": "{icon}  {text}",
+    "return-type": "json",
+    "format-icons": {
+      "notification": "󱅫",
+      "none": "󰂚",
+      "dnd-notification": "󰂛",
+      "dnd-none": "󰂛",
+      "inhibited-notification": "󰂛",
+      "inhibited-none": "󰂛",
+      "dnd-inhibited-notification": "󰂛",
+      "dnd-inhibited-none": "󰂛"
+    },
+    "exec": "swaync-client -swb",
+    "on-click": "swaync-client -t -sw",
+    "on-click-right": "swaync-client -d -sw",
+    "escape": true
+  },
+  "custom/warm-display": {
+    "exec": "~/.local/bin/warm-display status",
+    "return-type": "json",
+    "interval": 5,
+    "format": "{text}",
+    "tooltip": true,
+    "on-click": "~/.local/bin/warm-display toggle",
+    "on-click-right": "~/.local/bin/warm-display reset"
+  }
+}

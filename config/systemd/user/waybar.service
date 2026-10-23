@@ -1,0 +1,13 @@
+[Unit]
+Description=Desktop status bar
+PartOf=graphical-session.target
+ConditionEnvironment=WAYLAND_DISPLAY
+
+[Service]
+ExecStart=/usr/bin/waybar
+ExecReload=/bin/kill -USR2 $MAINPID
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target
