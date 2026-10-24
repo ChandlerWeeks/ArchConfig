@@ -81,7 +81,7 @@ bindings to fit the apps installed on another machine.
 
 Both physical Alt keys act as Ctrl; both physical Ctrl keys act as Alt.
 In Kitty, **physical Alt + T / W** opens / closes a tab, and **physical Alt +
-Left / H / K** or **Right / J / L** switches tabs. Kitty uses 92% background
+Left / H / K** or **Right / J / L** switches tabs. Kitty uses 82% background
 opacity. New Kitty processes are required when enabling dynamic opacity for
 the first time.
 
@@ -152,5 +152,7 @@ backup, including its original uncommitted changes and local runtime state.
   [cliphist](https://github.com/sentriz/cliphist), and
   [hyprsunset](https://github.com/hyprwm/hyprsunset).
 
-The contour wallpaper is generated from the included SVG. Theme assets installed
+The current lake wallpaper was generated with the built-in imagegen tool; its prompt
+is included beside the image. The earlier contour wallpaper and SVG are also included.
+Theme assets installed
 outside this checkout retain their upstream licenses.
