@@ -64,6 +64,20 @@ def main():
         backup.mkdir(parents=True,exist_ok=True)
         (backup/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
         print(f'Backup and rollback manifest: {backup}')
+    # Keep personal shell settings private; source only the shared fragment.
+    bashrc=home/'.bashrc'
+    marker='# >>> dotfiles interactive extras >>>'
+    current=bashrc.read_text() if bashrc.exists() else ''
+    if marker not in current:
+        print(f'HOOK {bashrc}: source shared interactive extras')
+        if not args.dry_run:
+            backup.mkdir(parents=True,exist_ok=True)
+            if bashrc.exists(): shutil.copy2(bashrc,backup/'bashrc.before-hook')
+            hook='\n'+marker+'\n'
+            hook+='if [[ -r "${XDG_CONFIG_HOME:-$HOME/.config}/bash/interactive.bash" ]]; then\n'
+            hook+='    . "${XDG_CONFIG_HOME:-$HOME/.config}/bash/interactive.bash"\nfi\n'
+            hook+='# <<< dotfiles interactive extras <<<\n'
+            bashrc.write_text(current+hook)
     print('Dry run complete.' if args.dry_run else 'Installed. Run scripts/apply-theme and ~/.local/bin/desktop-startup in Hyprland.')
 
 if __name__=='__main__':

@@ -1,7 +1,7 @@
 # ArchConfig · Catppuccin Mocha
 
 My Arch Linux / Hyprland desktop, using Catppuccin Mocha with mauve accents,
-small rounded corners, and the Adwaita cursor.
+small rounded corners, a Nyarch-style terminal greeting, and the Adwaita cursor.
 
 The repository keeps XDG configs in `config/`, executable helpers in `bin/`,
 and monitor/GPU choices in `hosts/`. Installed configs link back to this checkout,
@@ -156,3 +156,17 @@ The current lake wallpaper was generated with the built-in imagegen tool; its pr
 is included beside the image. The earlier contour wallpaper and SVG are also included.
 Theme assets installed
 outside this checkout retain their upstream licenses.
+
+
+## Terminal greeting and window spacing
+
+Interactive Bash terminals and new Kitty tabs start with a Nyarch-style fastfetch:
+the original cat-eared Arch logo, mauve system labels, and a small `nya~` greeting.
+Nested shells and noninteractive commands do not repeat it. The installer adds a
+single source hook to `.bashrc`; personal shell settings stay outside Git. A copy
+of `.bashrc` before adding the hook is saved with the installation backups.
+Removing the marked hook disables the greeting; it also becomes inactive if the
+shared Bash fragment is uninstalled.
+
+Hyprland uses 18px outer gaps and 3px inner gaps. These are explicit settings in
+`config/hypr/hyprland.conf` and can be adjusted independently of Kitty's padding.
